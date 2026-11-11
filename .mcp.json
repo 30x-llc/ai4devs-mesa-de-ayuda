@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "mesa-de-ayuda": {
+      "command": "uv",
+      "args": ["run", "--with", "fastmcp==4.1.8", "mcp/servidor.py"]
+    }
+  }
+}
