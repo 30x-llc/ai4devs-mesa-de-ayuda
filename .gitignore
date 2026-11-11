@@ -1,0 +1,14 @@
+# Base generada por scripts/reset.sh
+data/*.db
+data/*.db-journal
+
+# Aprobaciones locales de Claude Code (cada persona tiene las suyas)
+.claude/settings.local.json
+
+# Python
+__pycache__/
+.venv/
+
+# Sistema y logs
+.DS_Store
+*.log

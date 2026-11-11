@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install sqlite3, jq and shellcheck if missing
+        run: |
+          missing=""
+          for tool in sqlite3 jq shellcheck; do
+            command -v "$tool" >/dev/null || missing="$missing $tool"
+          done
+          if [ -n "$missing" ]; then
+            sudo apt-get update -qq
+            # shellcheck disable=SC2086
+            sudo apt-get install -y -qq $missing
+          fi
+
+      - name: Seed the database
+        run: ./scripts/reset.sh
+
+      - name: Check 40 pending tickets
+        run: |
+          n=$(sqlite3 data/tickets.db "SELECT COUNT(*) FROM tickets WHERE estado = 'pendiente';")
+          echo "pending=$n"
+          test "$n" -eq 40
+
+      - name: ShellCheck
+        run: find . -name '*.sh' -not -path './.git/*' -print0 | xargs -0 -r shellcheck
+
+      - name: Compile Python
+        run: find . -name '*.py' -not -path './.git/*' -print0 | xargs -0 -r python3 -m py_compile
+
+      - name: Validate JSON config
+        run: |
+          for f in .claude/settings.json .mcp.json; do
+            if [ -f "$f" ]; then jq empty "$f" && echo "ok $f"; fi
+          done
+
+      - name: Test the delete hook
+        run: |
+          hook=.claude/hooks/bloquear-delete.sh
+          if [ ! -f "$hook" ]; then echo "No hook in this act"; exit 0; fi
+          rc=0
+          echo '{"tool_input":{"command":"sqlite3 data/tickets.db \"DELETE FROM tickets\""}}' | "$hook" || rc=$?
+          test "$rc" -eq 2 || { echo "DELETE: expected exit 2, got $rc"; exit 1; }
+          rc=0
+          echo '{"tool_input":{"command":"sqlite3 data/tickets.db \"SELECT COUNT(*) FROM tickets\""}}' | "$hook" || rc=$?
+          test "$rc" -eq 0 || { echo "SELECT: expected exit 0, got $rc"; exit 1; }
+          echo "hook ok"
